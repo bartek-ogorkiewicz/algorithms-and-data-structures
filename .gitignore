@@ -1,0 +1,9 @@
+# binarki
+*.e
+*.out
+a.out
+*.o
+*.dSYM/
+# macOS / edytor
+.DS_Store
+.vscode/
