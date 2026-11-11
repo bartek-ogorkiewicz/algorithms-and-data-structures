@@ -1,0 +1,236 @@
+# ASD na Linuksie (students): kompilacja, brute, generatorki, stress testy
+
+Wszystko poniżej dotyczy Linuksa (students, komputery w labach). Tu `g++` to
+prawdziwe GCC, więc `bits/stdc++.h` i sanitizery działają od ręki.
+
+---
+
+## 1. Kompilacja
+
+### Zwykła kompilacja (bez flag)
+
+```bash
+g++ roz.cpp -o roz.e
+```
+
+- `-o roz.e`: nazwa programu wynikowego (`.e` jest w `.gitignore`); bez tego
+  program nazywa się `a.out`
+
+Wystarczy, żeby sprawdzić, czy kod się kompiluje i działa na przykładzie.
+Bez optymalizacji program jest jednak kilka razy wolniejszy, więc nie mierz
+tak czasu.
+
+### Z flagami (jak na sprawdzaczce)
+
+```bash
+g++ -O2 -std=c++17 roz.cpp -o roz.e
+```
+
+- `-O2`: optymalizacje, program działa szybko
+- `-std=c++17`: wersja C++ (potrzebna np. do `auto [a, b] = para;`)
+
+Tak kompiluje `stress.sh` i tego używaj, gdy mierzysz czas.
+
+### Z flagami do debugowania (gdy coś jest nie tak)
+
+```bash
+g++ -std=c++17 -Wall -Wextra -g -D_GLIBCXX_DEBUG -fsanitize=address,undefined roz.cpp -o roz.e
+```
+
+Działa wolniej, ale zamiast po cichu liczyć bzdury, program wywala się
+z opisem błędu i numerem linii.
+
+- `-Wall -Wextra`: ostrzeżenia (nieużyta zmienna, porównanie `int` z `size_t`, brak `return`)
+- `-g`: numery linii w komunikatach o błędach
+- `-D_GLIBCXX_DEBUG`: `vector`, `string` itd. sprawdzają indeksy, `v[n]` przy rozmiarze `n` od razu daje błąd
+- `-fsanitize=address`: wyjście poza zwykłą tablicę, użycie zwolnionej pamięci
+- `-fsanitize=undefined`: przepełnienie `int`, dzielenie przez zero, przesunięcie bitowe o za dużo
+
+**Ważne:** zawsze przed oddaniem przepuść rozwiązanie przez wersję debug na
+kilku testach. Przepełnienie `int` to najczęstszy cichy błąd na ASD.
+
+Żeby nie przepisywać długiej komendy: strzałka w górę cofa do poprzednich
+komend, a `Ctrl+R` + kawałek tekstu (np. `sanit`) wyszukuje w historii.
+
+---
+
+## 2. Uruchamianie
+
+```bash
+./roz.e                       # wpisujesz wejście ręcznie, koniec: Ctrl+D
+./roz.e < test.in             # wejście z pliku
+./roz.e < test.in > roz.out   # wejście z pliku, wynik do pliku
+time ./roz.e < duzy.in        # ile trwa (patrz na "real")
+diff roz.out test.ok          # porównanie z oczekiwanym wynikiem; brak wyjścia = identyczne
+```
+
+---
+
+## 3. Jak pisać brute
+
+Brute to drugie, **wolne, ale oczywiście poprawne** rozwiązanie. Stress test
+ma sens tylko wtedy, gdy brute'owi można ufać.
+
+Zasady:
+
+- **Najgłupsze możliwe podejście.** Sprawdź wszystkie przedziały, wszystkie
+  podzbiory (`for mask < (1 << n)`), wszystkie permutacje (`next_permutation`),
+  symuluj zadanie krok po kroku dokładnie tak, jak opisuje je treść.
+- **Złożoność nie ma znaczenia.** O(n³) czy O(2ⁿ · n) jest OK, bo testy z
+  generatorki są małe.
+- **Inny pomysł niż w rozwiązaniu.** Jeśli brute to ta sama idea, tylko
+  napisana wolniej, to oba programy zrobią ten sam błąd i stress test go nie
+  znajdzie.
+- **Bez sprytnych sztuczek.** Żadnych specjalnych przypadków, żadnych
+  optymalizacji. Mniej kodu = mniej miejsc na błąd.
+- **Ten sam format wejścia i wyjścia** co wzorcówka, co do znaku (spacje na
+  końcu linii skrypt toleruje, ale np. `YES` vs `Yes` już nie).
+- **`long long` wszędzie**, żeby brute sam się nie przepełnił.
+
+Przykład: zadanie „maksymalna suma spójnego fragmentu”.
+
+```cpp
+// brute: sprawdzam każdy fragment [i, j], O(n^2)
+long long best = LLONG_MIN;
+for (int i = 0; i < n; i++) {
+    long long s = 0;
+    for (int j = i; j < n; j++) {
+        s += a[j];
+        best = max(best, s);
+    }
+}
+cout << best << "\n";
+```
+
+---
+
+## 4. Jak pisać generatorkę
+
+Generatorka wypisuje jeden losowy test na standardowe wyjście. Używasz
+szablonu `stress-template/gen.cpp` i zmieniasz tylko część **LOSOWANIE TESTU**.
+
+```cpp
+mt19937 rng(seed);                                   // ziarno z argumentu
+auto rnd = [&](int a, int b) { return a + (int)(rng() % (b - a + 1)); };  // liczba z [a, b]
+```
+
+Zasady:
+
+- **Ziarno z argumentu, nigdy z `time(0)`.** Wtedy `./gen.e 734` zawsze daje
+  ten sam test i każdy znaleziony błąd da się odtworzyć.
+- **Małe testy.** n do 5–10, wartości do ~10–20. Błąd znaleziony na teście
+  z `n = 4` przeanalizujesz na kartce, na teście z `n = 1000` nie.
+- **Losuj też rozmiar**, nie tylko zawartość: `int n = rnd(1, 8);`. Wtedy
+  trafiają się przypadki brzegowe typu `n = 1`.
+- **Wymuszaj trudne przypadki.** Czysto losowe dane rzadko trafiają w błędy.
+  Dobre sztuczki:
+  - mały zakres wartości (`rnd(1, 3)`) → dużo powtórzeń i remisów
+  - czasem wszystkie elementy równe, czasem posortowane rosnąco / malejąco
+  - wartości ujemne i zero, jeśli treść je dopuszcza
+  - losowa „gęstość” na cały test (jak w `lab03/gen.cpp`: raz prawie same
+    pułapki, raz prawie żadnych)
+  ```cpp
+  int typ = rnd(0, 2);
+  for (int i = 0; i < n; i++) {
+      if (typ == 0) a[i] = rnd(-10, 10);   // zwykły losowy
+      if (typ == 1) a[i] = 5;              // wszystkie równe
+      if (typ == 2) a[i] = i;              // rosnący
+  }
+  ```
+- **Format dokładnie jak w treści.** Każde ograniczenie z treści musi być
+  spełnione (np. liczby różne, graf spójny, `m ≤ n`), inaczej szukasz błędów,
+  których na sprawdzaczce nie będzie. Uważaj na przypadki typu „przy m = 0
+  drugiej linii nie ma”.
+- **Najpierw sprawdź generatorkę ręcznie:**
+  ```bash
+  g++ -O2 -std=c++17 gen.cpp -o gen.e
+  ./gen.e 1; ./gen.e 2; ./gen.e 3
+  ```
+
+---
+
+## 5. Stress test krok po kroku
+
+### Nowe zadanie
+
+```bash
+cp -r ~/asd/stress-template ~/asd/lab/labXX/zadanie
+cd ~/asd/lab/labXX/zadanie
+# piszesz wzo.cpp (rozwiązanie), brute.cpp, poprawiasz gen.cpp
+bash stress.sh          # 2000 testów
+bash stress.sh 10000    # więcej, jeśli 2000 przeszło, a nadal masz WA
+```
+
+Skrypt sam kompiluje wszystkie trzy programy, więc po każdej poprawce po prostu
+odpalasz go znowu.
+
+### Co może wypisać
+
+| Komunikat | Co znaczy | Co robić |
+|---|---|---|
+| `OK, 2000 testów zgodnych` | brak różnic | zwiększ liczbę testów albo urozmaić generatorkę |
+| `Różnica dla ziarna 734` + test + oba wyniki | wzo i brute dają różne odpowiedzi | sprawdź na kartce, kto ma rację (brute też może się mylić!) |
+| `wzo.e: przekroczony czas (2 s)` | program się zawiesił (albo jest strasznie wolny) | szukaj nieskończonej pętli; często program czyta inny format, niż generatorka wypisuje |
+| `wzo.e: błąd wykonania (kod 134/136/139)` | program się wywalił | 134 = abort/assert, 136 = dzielenie przez zero, 139 = segfault (wyjście poza tablicę) |
+| `Nie kompiluje się: brute.cpp` | błąd kompilacji | komunikat g++ jest wyżej |
+
+### Odtworzenie konkretnego testu
+
+```bash
+./gen.e 734 > test.in      # dokładnie ten sam test co w stress teście
+cat test.in
+./wzo.e   < test.in
+./brute.e < test.in
+```
+
+Gdy program się wywala, przekompiluj go w wersji debug (sekcja 1) i odpal na
+tym teście. Dostaniesz numer linii z błędem.
+
+---
+
+## 6. Gdy jest kilka poprawnych odpowiedzi
+
+Jeśli treść mówi „wypisz dowolne rozwiązanie”, porównywanie plików nie działa:
+wzo i brute mogą wypisać różne, ale oba poprawne odpowiedzi. Wtedy zamiast
+porównywać, piszesz **checker**: program, który dostaje test i odpowiedź
+wzorcówki i sprawdza, czy ta odpowiedź jest *poprawna* (np. czy wypisana
+ścieżka istnieje w grafie i ma długość równą tej z brute'a).
+
+W `stress.sh` zamieniasz wtedy linijkę z `diff` na coś w stylu:
+
+```bash
+if ! ./chk.e test.in wzo.out brute.out; then   # chk zwraca 0, gdy OK
+```
+
+---
+
+## 7. Częste problemy
+
+- **`Permission denied (publickey)` przy rsync/ssh** → zły login w adresie
+  (`bo479578@students.mimuw.edu.pl`).
+- **Program z Maca nie odpala się na studentsie** (`cannot execute binary
+  file`) → binarki `.e` nie przenoszą się między systemami, skompiluj od nowa.
+  Przy kopiowaniu można je pominąć: `rsync -avz --exclude='*.e' ...`.
+- **Na sprawdzaczce WA, a stress test OK** → testy za mało różnorodne. Dodaj
+  przypadki brzegowe do generatorki, zwiększ zakres wartości (przepełnienia
+  wychodzą dopiero przy dużych liczbach, dlatego wersja debug z
+  `-fsanitize=undefined` jest tu kluczowa).
+- **Na sprawdzaczce TLE** → stress test nie mierzy szybkości. Wygeneruj jeden
+  maksymalny test (n z górnej granicy treści) i zmierz: `time ./wzo.e < max.in`.
+- **Licznik w stress.sh szybko leci, ale nic nie łapie, choć wiesz, że jest
+  błąd** → sprawdź `./gen.e 1`, czy generatorka w ogóle wypisuje sensowny test.
+
+---
+
+## Ściąga
+
+```bash
+g++ roz.cpp -o roz.e                          # zwykła kompilacja
+g++ -O2 -std=c++17 roz.cpp -o roz.e           # z flagami (jak sprawdzaczka)
+g++ -std=c++17 -Wall -Wextra -g -D_GLIBCXX_DEBUG -fsanitize=address,undefined roz.cpp -o roz.e   # debug
+./roz.e < test.in                  # uruchom na teście
+cp -r ~/asd/stress-template .      # nowy stress test
+bash stress.sh 5000                # odpal
+./gen.e 734 > test.in              # odtwórz test z ziarna
+rsync -avz --exclude='*.e' . bo479578@students.mimuw.edu.pl:~/asd/   # (z Maca) wyślij zmiany
+```
