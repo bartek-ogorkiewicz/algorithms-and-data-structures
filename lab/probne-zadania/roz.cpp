@@ -5,23 +5,28 @@ using namespace std;
 using ll = long long;
 
 void solve() {
-    int n, w;
-    cin >> n >> w;
+    int n;
+    ll l, r;
+    cin >> n >> l >> r;
     vector<int> a(n);
     for (auto& s : a) {
         cin >> s;
     }
-    sort(a.begin(), a.end());
 
-    int maxi = 0;
+    ll ans = 0;
+    int j = 0;
+    int k = 0;
+    sort(a.begin(), a.end());
     for (int i = 0; i < n; i++) {
-        int j = i;
-        while (j < n && a[j] <= (ll)a[i] + w) {
+        while (j < i && a[i] - a[j] > r) {
             j++;
         }
-        maxi = max(maxi, j- i);
+        while (k < i && a[i] - a[k] >= l) {
+            k++;
+        }
+        ans += k - j;
     }
-    cout << maxi << "\n";
+    cout << ans << "\n";
 }
 
 int main() {
