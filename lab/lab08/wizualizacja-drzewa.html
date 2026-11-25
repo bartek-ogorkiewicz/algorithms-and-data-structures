@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drzewo przedziałowe</title>
+<style>
+:root {
+  --bg: #f6f6f4; --panel: #ffffff; --fg: #1d1d1f; --muted: #6b6b72; --border: #dadade;
+  --node: #ffffff; --node-b: #8a8a93; --edge: #b8b8bf;
+  --sel: #7c3aed; --cur: #e11d48;
+  --part: #fde68a; --part-b: #d97706;
+  --full: #bbf7d0; --full-b: #16a34a;
+  --out: #ececee; --out-fg: #a1a1aa;
+  --path: #bfdbfe; --path-b: #2563eb;
+  --range: #fef3c7; --selrange: #ede9fe;
+  --btn: #26262b; --btn-fg: #ffffff; --btn2: #ececef;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141416; --panel: #1c1c20; --fg: #ececf0; --muted: #9b9ba5; --border: #34343b;
+    --node: #24242a; --node-b: #7b7b86; --edge: #4b4b54;
+    --sel: #a78bfa; --cur: #fb7185;
+    --part: #5a4210; --part-b: #f59e0b;
+    --full: #14532d; --full-b: #4ade80;
+    --out: #2a2a30; --out-fg: #6b6b75;
+    --path: #1e3a8a; --path-b: #60a5fa;
+    --range: #3b3112; --selrange: #2f2552;
+    --btn: #ececf0; --btn-fg: #141416; --btn2: #2c2c33;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141416; --panel: #1c1c20; --fg: #ececf0; --muted: #9b9ba5; --border: #34343b;
+  --node: #24242a; --node-b: #7b7b86; --edge: #4b4b54;
+  --sel: #a78bfa; --cur: #fb7185;
+  --part: #5a4210; --part-b: #f59e0b;
+  --full: #14532d; --full-b: #4ade80;
+  --out: #2a2a30; --out-fg: #6b6b75;
+  --path: #1e3a8a; --path-b: #60a5fa;
+  --range: #3b3112; --selrange: #2f2552;
+  --btn: #ececf0; --btn-fg: #141416; --btn2: #2c2c33;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.wrap { max-width: 1280px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 1.35rem; margin: 4px 0 2px; }
+h2 { font-size: .95rem; margin: 0 0 8px; color: var(--muted); font-weight: 600; }
+.sub { color: var(--muted); margin: 0 0 14px; }
+.panel {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 14px; margin-bottom: 12px; min-width: 0;
+}
+.controls { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; }
+.group { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.group > .lbl { font-weight: 600; margin-right: 2px; }
+label { color: var(--muted); }
+input[type=number], select {
+  font: inherit; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg); color: var(--fg);
+}
+input[type=number] { width: 4.4em; }
+button {
+  font: inherit; padding: 4px 11px; border-radius: 6px; border: 1px solid var(--btn);
+  background: var(--btn); color: var(--btn-fg); cursor: pointer;
+}
+button.sec { background: var(--btn2); color: var(--fg); border-color: var(--border); }
+button:disabled { opacity: .4; cursor: default; }
+.status { margin-top: 10px; min-height: 1.4em; font-weight: 600; }
+.status.err { color: var(--cur); }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; }
+@media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.treebox { overflow-x: auto; }
+svg { display: block; }
+svg text { font-family: inherit; fill: var(--fg); }
+svg .muted { fill: var(--muted); }
+.edge { stroke: var(--edge); stroke-width: 1.5; }
+.conn { stroke: var(--edge); stroke-width: 1; stroke-dasharray: 3 3; }
+.node, .seq { cursor: pointer; }
+.node rect, .seq rect { fill: var(--node); stroke: var(--node-b); stroke-width: 1.5; }
+.node.k-part rect { fill: var(--part); stroke: var(--part-b); }
+.node.k-full rect { fill: var(--full); stroke: var(--full-b); }
+.node.k-out rect { fill: var(--out); stroke: var(--out-fg); }
+.node.k-out text { fill: var(--out-fg); }
+.node.path rect { fill: var(--path); stroke: var(--path-b); }
+.node.sel rect { stroke: var(--sel); stroke-width: 3.5; }
+.node.cur rect { stroke: var(--cur); stroke-width: 3.5; }
+.seq.inq rect { fill: var(--range); stroke: var(--part-b); }
+.seq.insel rect { fill: var(--selrange); stroke: var(--sel); }
+.seq.upd rect { fill: var(--path); stroke: var(--path-b); }
+.badge rect { fill: var(--panel); stroke: var(--cur); stroke-width: 1; }
+.badge text { fill: var(--cur); font-weight: 700; }
+.arr { display: flex; flex-wrap: wrap; gap: 4px; }
+.cell {
+  width: 48px; border: 1.5px solid var(--node-b); border-radius: 6px; text-align: center;
+  cursor: pointer; background: var(--node); font-variant-numeric: tabular-nums;
+}
+.cell .i { font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--border); }
+.cell .v { font-weight: 600; padding: 2px 0; }
+.cell.empty { opacity: .5; border-style: dashed; cursor: default; }
+.cell.k-part { background: var(--part); border-color: var(--part-b); }
+.cell.k-full { background: var(--full); border-color: var(--full-b); }
+.cell.k-out { background: var(--out); border-color: var(--out-fg); color: var(--out-fg); }
+.cell.path { background: var(--path); border-color: var(--path-b); }
+.cell.sel { outline: 3px solid var(--sel); outline-offset: 1px; }
+.cell.cur { outline: 3px solid var(--cur); outline-offset: 1px; }
+.note { color: var(--muted); font-size: .88rem; margin-top: 8px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .85rem; color: var(--muted); margin-top: 8px; }
+.sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; border: 1.5px solid; }
+.info dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 0; }
+.info dt { color: var(--muted); }
+.info dd { margin: 0; font-variant-numeric: tabular-nums; }
+.info .big { font-size: 1.15rem; font-weight: 700; margin-bottom: 6px; }
+.link { background: none; border: none; color: var(--sel); padding: 0; text-decoration: underline; }
+.log { margin: 0; padding-left: 2.4em; max-height: 300px; overflow-y: auto; font-size: .88rem; }
+.log li { margin: 2px 0; }
+.log li.head { list-style: none; margin-left: -2.4em; font-weight: 600; color: var(--muted); }
+.log li.last { color: var(--cur); font-weight: 600; }
+.anim { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+.anim input[type=range] { width: 110px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Drzewo przedziałowe (top-down)</h1>
+  <p class="sub">Węzeł v pokrywa przedział [lo, hi]; dzieci to 2v i 2v+1, podział w m = ⌊(lo+hi)/2⌋:
+    lewe dziecko [lo, m], prawe [m+1, hi]. Kliknij węzeł, komórkę tablicy albo element ciągu.</p>
+
+  <div class="panel">
+    <div class="controls">
+      <div class="group">
+        <span class="lbl">Drzewo</span>
+        <label for="n">n</label><input type="number" id="n" min="1" max="64" value="10">
+        <button id="bBuild" class="sec">Nowe n</button>
+        <label for="op">działanie</label>
+        <select id="op">
+          <option value="sum">suma</option>
+          <option value="min">min</option>
+          <option value="max">max</option>
+        </select>
+        <button id="bRand" class="sec">Losuj</button>
+        <button id="bZero" class="sec">Wyzeruj</button>
+      </div>
+      <div class="group">
+        <span class="lbl">Update</span>
+        <label for="uk">k</label><input type="number" id="uk" min="1" value="3">
+        <select id="um"><option value="set">a[k] = x</option><option value="add">a[k] += x</option></select>
+        <label for="ux">x</label><input type="number" id="ux" value="5">
+        <button id="bUpd">Wykonaj</button>
+      </div>
+      <div class="group">
+        <span class="lbl">Zapytanie</span>
+        <label for="ql">l</label><input type="number" id="ql" min="1" value="2">
+        <label for="qr">r</label><input type="number" id="qr" min="1" value="7">
+        <button id="bQry">Policz</button>
+      </div>
+    </div>
+    <div id="status" class="status"></div>
+  </div>
+
+  <div class="grid">
+    <div>
+      <div class="panel">
+        <h2>Drzewo i reprezentowany ciąg a<sub>1</sub>…a<sub>n</sub> (liście)</h2>
+        <div class="treebox" id="treebox"></div>
+        <div class="legend">
+          <span><span class="sw" style="background:var(--part);border-color:var(--part-b)"></span>przecina częściowo — schodzimy niżej</span>
+          <span><span class="sw" style="background:var(--full);border-color:var(--full-b)"></span>zawarty w [l, r] — bierzemy wartość</span>
+          <span><span class="sw" style="background:var(--out);border-color:var(--out-fg)"></span>rozłączny — element neutralny</span>
+          <span><span class="sw" style="background:var(--path);border-color:var(--path-b)"></span>ścieżka update</span>
+          <span><span class="sw" style="background:transparent;border-color:var(--cur)"></span>bieżący krok</span>
+          <span><span class="sw" style="background:transparent;border-color:var(--sel)"></span>zaznaczony</span>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Tablica t[] — implementacja drzewa</h2>
+        <div class="arr" id="arr"></div>
+        <div class="note" id="arrnote"></div>
+      </div>
+    </div>
+    <div>
+      <div class="panel info" id="info"></div>
+      <div class="panel">
+        <h2>Przebieg operacji</h2>
+        <div class="anim">
+          <button id="bStep" class="sec" title="Strzałka w prawo">Krok</button>
+          <button id="bPlay" class="sec">Odtwarzaj</button>
+          <button id="bEnd" class="sec">Do końca</button>
+          <button id="bClear" class="sec">Wyczyść</button>
+          <label for="speed">tempo</label><input type="range" id="speed" min="0" max="100" value="55">
+        </div>
+        <ol class="log" id="log"></ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const MAXN = 64;
+const V = x => x === Infinity ? "+∞" : x === -Infinity ? "−∞" : String(x);
+const OPS = {
+  sum: { name: "suma", e: 0, f: (x, y) => x + y, fmt: (x, y) => `${V(x)} + ${V(y)}` },
+  min: { name: "minimum", e: Infinity, f: (x, y) => Math.min(x, y), fmt: (x, y) => `min(${V(x)}, ${V(y)})` },
+  max: { name: "maksimum", e: -Infinity, f: (x, y) => Math.max(x, y), fmt: (x, y) => `max(${V(x)}, ${V(y)})` },
+};
+const $ = id => document.getElementById(id);
+
+let n = 10, opKey = "sum";
+let a = [];               // a[1..n]
+let t = [];               // t[v] — stan rzeczywisty
+let disp = [];            // t[v] — stan pokazywany (dogania t w trakcie animacji)
+let LO = [], HI = [], DEP = [], leafOf = [], maxV = 1, maxDep = 0;
+let sel = null;
+let anim = null;
+let logItems = [];
+
+function build() {
+  const O = OPS[opKey];
+  t = []; LO = []; HI = []; DEP = []; leafOf = []; maxV = 1; maxDep = 0;
+  const rec = (v, l, h, d) => {
+    LO[v] = l; HI[v] = h; DEP[v] = d;
+    maxV = Math.max(maxV, v); maxDep = Math.max(maxDep, d);
+    if (l === h) { t[v] = a[l]; leafOf[l] = v; return; }
+    const m = (l + h) >> 1;
+    rec(2 * v, l, m, d + 1);
+    rec(2 * v + 1, m + 1, h, d + 1);
+    t[v] = O.f(t[2 * v], t[2 * v + 1]);
+  };
+  rec(1, 1, n, 0);
+  disp = t.slice();
+  if (sel !== null && LO[sel] === undefined) sel = null;
+}
+
+function fresh(fill) {
+  stopAnim(); anim = null; logItems = [];
+  a = [undefined];
+  for (let i = 1; i <= n; i++) a.push(fill(i));
+  build(); render();
+}
+const randomFill = () => Math.floor(Math.random() * 10);
+
+// ---------- operacje: generują listę kroków, stan rzeczywisty zmieniają od razu ----------
+
+function doQuery(l, r) {
+  finishAnim();
+  const O = OPS[opKey], ev = [];
+  let visited = 0;
+  const rec = v => {
+    visited++;
+    const lo = LO[v], hi = HI[v], iv = `[${lo}, ${hi}]`;
+    if (r < lo || hi < l) {
+      ev.push({ type: "out", v, val: O.e, msg: `węzeł ${v} ${iv} rozłączny z [${l}, ${r}] → zwraca ${V(O.e)} (neutralny)` });
+      return O.e;
+    }
+    if (l <= lo && hi <= r) {
+      ev.push({ type: "full", v, val: t[v], msg: `węzeł ${v} ${iv} ⊆ [${l}, ${r}] → zwraca t[${v}] = ${V(t[v])}` });
+      return t[v];
+    }
+    ev.push({ type: "part", v, msg: `węzeł ${v} ${iv} przecina [${l}, ${r}] częściowo → pytamy dzieci ${2 * v} i ${2 * v + 1}` });
+    const x = rec(2 * v), y = rec(2 * v + 1), res = O.f(x, y);
+    ev.push({ type: "ret", v, val: res, msg: `węzeł ${v}: ${O.fmt(x, y)} = ${V(res)}` });
+    return res;
+  };
+  const res = rec(1);
+  ev.push({ type: "done", msg: `${O.name} na [${l}, ${r}] = ${V(res)} · odwiedzone węzły: ${visited} (przedział ma ${r - l + 1} el.)` });
+  startAnim(ev, { range: [l, r], title: `zapytanie [${l}, ${r}]` });
+}
+
+function doUpdate(k, x, mode) {
+  finishAnim();
+  const O = OPS[opKey], ev = [];
+  const old = a[k], nv = mode === "add" ? a[k] + x : x;
+  a[k] = nv;
+  const rec = v => {
+    const lo = LO[v], hi = HI[v], iv = `[${lo}, ${hi}]`;
+    if (lo === hi) {
+      const o = t[v]; t[v] = nv;
+      ev.push({ type: "leaf", v, val: nv, msg: `liść ${v} ${iv}: ${V(o)} → ${V(nv)}` });
+      return;
+    }
+    const m = (lo + hi) >> 1, c = k <= m ? 2 * v : 2 * v + 1;
+    ev.push({ type: "down", v, msg: `węzeł ${v} ${iv}, m = ${m}: k = ${k} ${k <= m ? "≤ m → lewe dziecko" : "> m → prawe dziecko"} ${c}` });
+    rec(c);
+    const o = t[v];
+    t[v] = O.f(t[2 * v], t[2 * v + 1]);
+    ev.push({ type: "up", v, val: t[v], msg: `węzeł ${v}: ${O.fmt(t[2 * v], t[2 * v + 1])} = ${V(t[v])}` + (o !== t[v] ? ` (było ${V(o)})` : " (bez zmian)") });
+  };
+  rec(1);
+  ev.push({ type: "done", msg: `a[${k}]: ${V(old)} → ${V(nv)} · przeliczone węzły: ${DEP[leafOf[k]] + 1} (ścieżka liść–korzeń)` });
+  startAnim(ev, { k, title: mode === "add" ? `update a[${k}] += ${x}` : `update a[${k}] = ${x}` });
+}
+
+// ---------- animacja ----------
+
+function startAnim(events, opts) {
+  anim = Object.assign({ events, i: 0, kind: {}, ret: {}, path: new Set(), cur: null, timer: null, range: null, k: null }, opts);
+  logItems = [{ head: true, msg: opts.title }];
+  setStatus("");
+  render();
+  play();
+}
+
+function applyNext() {
+  const e = anim.events[anim.i++];
+  anim.cur = e.v ?? null;
+  switch (e.type) {
+    case "out": case "full": anim.kind[e.v] = e.type; anim.ret[e.v] = e.val; break;
+    case "part": anim.kind[e.v] = "part"; break;
+    case "ret": anim.ret[e.v] = e.val; break;
+    case "down": anim.path.add(e.v); break;
+    case "leaf": case "up": anim.path.add(e.v); disp[e.v] = e.val; break;
+    case "done": setStatus(e.msg); break;
+  }
+  logItems.push({ msg: e.msg });
+}
+
+const pending = () => anim && anim.i < anim.events.length;
+const delay = () => Math.round(1600 * Math.pow(0.04, $("speed").value / 100));
+
+function stopAnim() {
+  if (anim && anim.timer) { clearInterval(anim.timer); anim.timer = null; }
+}
+function play() {
+  if (!pending()) return;
+  stopAnim();
+  anim.timer = setInterval(() => {
+    if (!pending()) { stopAnim(); render(); return; }
+    applyNext(); render();
+  }, delay());
+  render();
+}
+function step() { if (!pending()) return; stopAnim(); applyNext(); render(); }
+function finishAnim() {
+  if (!anim) return;
+  stopAnim();
+  while (pending()) applyNext();
+  disp = t.slice();
+  render();
+}
+
+function setStatus(msg, err) {
+  const s = $("status");
+  s.textContent = msg; s.className = "status" + (err ? " err" : "");
+}
+
+// ---------- rysowanie ----------
+
+function classes(v) {
+  const c = [];
+  if (anim) {
+    if (anim.kind[v]) c.push("k-" + anim.kind[v]);
+    if (anim.path.has(v)) c.push("path");
+    if (anim.cur === v) c.push("cur");
+  }
+  if (sel === v) c.push("sel");
+  return c.join(" ");
+}
+
+const COL = 54, NW = 48, NH = 40, LEV = 76, PX = 18, PY = 24;
+const cx = v => PX + ((LO[v] + HI[v]) / 2 - 1) * COL + COL / 2;
+const ny = v => PY + DEP[v] * LEV;
+
+function renderTree() {
+  const W = n * COL + 2 * PX, seqY = PY + (maxDep + 1) * LEV - 8, H = seqY + NH + 26;
+  const out = [];
+  for (let v = 1; v <= maxV; v++) {
+    if (LO[v] === undefined || LO[v] === HI[v]) continue;
+    for (const c of [2 * v, 2 * v + 1])
+      out.push(`<line class="edge" x1="${cx(v)}" y1="${ny(v) + NH}" x2="${cx(c)}" y2="${ny(c)}"/>`);
+  }
+  for (let i = 1; i <= n; i++) {
+    const v = leafOf[i];
+    out.push(`<line class="conn" x1="${cx(v)}" y1="${ny(v) + NH}" x2="${cx(v)}" y2="${seqY}"/>`);
+  }
+  for (let v = 1; v <= maxV; v++) {
+    if (LO[v] === undefined) continue;
+    const x = cx(v) - NW / 2, y = ny(v);
+    out.push(`<g class="node ${classes(v)}" data-v="${v}">
+      <rect x="${x}" y="${y}" width="${NW}" height="${NH}" rx="6"/>
+      <text class="muted" x="${x}" y="${y - 5}" font-size="10">#${v}</text>
+      <text x="${cx(v)}" y="${y + 13}" font-size="10" text-anchor="middle" class="muted">[${LO[v]},${HI[v]}]</text>
+      <text x="${cx(v)}" y="${y + 32}" font-size="15" font-weight="700" text-anchor="middle">${V(disp[v])}</text>
+    </g>`);
+    if (anim && anim.ret[v] !== undefined) {
+      const s = "→ " + V(anim.ret[v]), bw = 10 + s.length * 7;
+      out.push(`<g class="badge"><rect x="${cx(v) - bw / 2}" y="${y + NH + 3}" width="${bw}" height="16" rx="8"/>
+        <text x="${cx(v)}" y="${y + NH + 15}" font-size="11" text-anchor="middle">${s}</text></g>`);
+    }
+  }
+  const rng = anim && anim.range, sr = sel !== null ? [LO[sel], HI[sel]] : null;
+  for (let i = 1; i <= n; i++) {
+    const x = PX + (i - 1) * COL + (COL - NW) / 2;
+    const c = [];
+    if (rng && i >= rng[0] && i <= rng[1]) c.push("inq");
+    if (anim && anim.k === i) c.push("upd");
+    if (sr && i >= sr[0] && i <= sr[1]) c.push("insel");
+    out.push(`<g class="seq ${c.join(" ")}" data-i="${i}">
+      <rect x="${x}" y="${seqY}" width="${NW}" height="${NH - 8}" rx="4"/>
+      <text x="${x + NW / 2}" y="${seqY + 21}" font-size="14" font-weight="600" text-anchor="middle">${V(disp[leafOf[i]])}</text>
+      <text class="muted" x="${x + NW / 2}" y="${seqY + NH + 8}" font-size="11" text-anchor="middle">a${sub(i)}</text>
+    </g>`);
+  }
+  $("treebox").innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Drzewo przedziałowe">${out.join("")}</svg>`;
+}
+const sub = i => String(i).replace(/\d/g, d => "₀₁₂₃₄₅₆₇₈₉"[d]);
+
+function renderArray() {
+  const out = [];
+  let unused = 0;
+  for (let v = 1; v <= maxV; v++) {
+    if (LO[v] === undefined) {
+      unused++;
+      out.push(`<div class="cell empty" title="indeks nieużywany"><div class="i">${v}</div><div class="v">·</div></div>`);
+    } else {
+      out.push(`<div class="cell ${classes(v)}" data-v="${v}" title="t[${v}]: [${LO[v]}, ${HI[v]}], głębokość ${DEP[v]}"><div class="i">${v}</div><div class="v">${V(disp[v])}</div></div>`);
+    }
+  }
+  $("arr").innerHTML = out.join("");
+  $("arrnote").textContent =
+    `Węzłów: ${2 * n - 1}, największy użyty indeks: ${maxV}, nieużyte indeksy w [1, ${maxV}]: ${unused}; t[0] jest pomijane. ` +
+    `Dla porównania 2n = ${2 * n}, 4n = ${4 * n}.`;
+}
+
+function renderInfo() {
+  const box = $("info");
+  if (sel === null) {
+    box.innerHTML = `<h2>Węzeł</h2><p class="note">Kliknij węzeł drzewa, komórkę tablicy t[] albo element ciągu a, żeby zobaczyć szczegóły.</p>`;
+    return;
+  }
+  const v = sel, lo = LO[v], hi = HI[v], O = OPS[opKey];
+  const leaf = lo === hi, m = (lo + hi) >> 1;
+  const link = u => `<button class="link" data-go="${u}">${u}</button>`;
+  const vals = [];
+  for (let i = lo; i <= hi; i++) vals.push(V(disp[leafOf[i]]));
+  box.innerHTML = `<h2>Węzeł</h2><div class="big">#${v} · [${lo}, ${hi}]</div><dl>
+    <dt>wartość</dt><dd>t[${v}] = ${V(disp[v])}</dd>
+    <dt>znaczenie</dt><dd>${O.name} z a${sub(lo)}${leaf ? "" : "…a" + sub(hi)}${vals.length <= 16 ? ` = ${O.name === "suma" ? vals.join(" + ") : (opKey + "(" + vals.join(", ") + ")")}` : ""}</dd>
+    <dt>długość</dt><dd>${hi - lo + 1}</dd>
+    <dt>głębokość</dt><dd>${DEP[v]}</dd>
+    <dt>rodzic</dt><dd>${v === 1 ? "— (korzeń)" : `⌊${v}/2⌋ = ${link(v >> 1)}`}</dd>
+    ${leaf
+      ? `<dt>dzieci</dt><dd>— (liść, odpowiada a${sub(lo)})</dd>`
+      : `<dt>podział</dt><dd>m = ⌊(${lo}+${hi})/2⌋ = ${m}</dd>
+         <dt>lewe</dt><dd>2·${v} = ${link(2 * v)} · [${lo}, ${m}]</dd>
+         <dt>prawe</dt><dd>2·${v}+1 = ${link(2 * v + 1)} · [${m + 1}, ${hi}]</dd>`}
+    <dt>neutralny</dt><dd>${V(O.e)}</dd>
+  </dl>`;
+}
+
+function renderLog() {
+  const ol = $("log");
+  ol.innerHTML = logItems.map((it, j) =>
+    `<li${it.head ? "" : ` value="${j}"`} class="${it.head ? "head" : ""}${!it.head && j === logItems.length - 1 && pending() ? " last" : ""}">${it.msg}</li>`).join("");
+  ol.scrollTop = ol.scrollHeight;
+  const p = pending(), playing = anim && anim.timer;
+  $("bStep").disabled = !p; $("bEnd").disabled = !p; $("bPlay").disabled = !p;
+  $("bPlay").textContent = playing ? "Pauza" : "Odtwarzaj";
+  $("bClear").disabled = !anim;
+}
+
+function render() {
+  for (const id of ["uk", "ql", "qr"]) $(id).max = n;
+  renderTree(); renderArray(); renderInfo(); renderLog();
+}
+
+// ---------- zdarzenia ----------
+
+function readInt(id, lo, hi, name) {
+  const x = Number($(id).value);
+  if (!Number.isInteger(x) || x < lo || x > hi) throw new Error(`${name} musi być liczbą całkowitą z [${lo}, ${hi}]`);
+  return x;
+}
+function guarded(fn) {
+  return () => { try { fn(); } catch (e) { setStatus(e.message, true); } };
+}
+
+$("bBuild").onclick = guarded(() => { n = readInt("n", 1, MAXN, "n"); sel = null; fresh(randomFill); });
+$("bRand").onclick = () => fresh(randomFill);
+$("bZero").onclick = () => fresh(() => 0);
+$("op").onchange = () => { opKey = $("op").value; stopAnim(); anim = null; logItems = []; build(); render(); };
+$("bUpd").onclick = guarded(() => {
+  const k = readInt("uk", 1, n, "k"), x = readInt("ux", -999, 999, "x");
+  doUpdate(k, x, $("um").value);
+});
+$("bQry").onclick = guarded(() => {
+  const l = readInt("ql", 1, n, "l"), r = readInt("qr", 1, n, "r");
+  if (l > r) throw new Error("musi być l ≤ r");
+  doQuery(l, r);
+});
+$("bStep").onclick = step;
+$("bEnd").onclick = finishAnim;
+$("bPlay").onclick = () => { if (anim && anim.timer) { stopAnim(); render(); } else play(); };
+$("bClear").onclick = () => { finishAnim(); anim = null; logItems = []; setStatus(""); render(); };
+$("speed").oninput = () => { if (anim && anim.timer) play(); };
+
+function select(v) { sel = sel === v ? null : v; render(); }
+document.addEventListener("click", e => {
+  const g = e.target.closest("[data-v]");
+  if (g) return select(Number(g.dataset.v));
+  const s = e.target.closest("[data-i]");
+  if (s) return select(leafOf[Number(s.dataset.i)]);
+  const go = e.target.closest("[data-go]");
+  if (go) { sel = Number(go.dataset.go); render(); }
+});
+document.addEventListener("keydown", e => {
+  if (e.target.matches("input, select")) return;
+  if (e.key === "ArrowRight") { e.preventDefault(); step(); }
+  if (e.key === "Escape") { sel = null; render(); }
+});
+for (const id of ["uk", "ux"]) $(id).addEventListener("keydown", e => { if (e.key === "Enter") $("bUpd").click(); });
+for (const id of ["ql", "qr"]) $(id).addEventListener("keydown", e => { if (e.key === "Enter") $("bQry").click(); });
+$("n").addEventListener("keydown", e => { if (e.key === "Enter") $("bBuild").click(); });
+
+fresh(randomFill);
+</script>
+</body>
+</html>
